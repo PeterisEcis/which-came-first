@@ -74,7 +74,8 @@ def test_output_and_logs_name_no_answer_year(
     tmp_path: Path,
 ) -> None:
     serve(monkeypatch, FEED)
-    caplog.set_level(logging.DEBUG)
+    # By name: Django's logging config holds this logger at INFO.
+    caplog.set_level(logging.DEBUG, logger="puzzle_generator")
 
     run("--verbose")
 

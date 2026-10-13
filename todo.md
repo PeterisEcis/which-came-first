@@ -5,7 +5,7 @@ players put them in chronological order. The real goal is learning the CI/CD ste
 proverb app had no reason to need: a real service, a database, migrations, deploys with
 rollback, and a human approval gate. Each one is required here, not contrived.
 
-**Current tier: Step 1 done. No GitHub Pages — a real service from day one.**
+**Current tier: Step 2 built; the page needs a check in a real browser. No GitHub Pages — a real service from day one.**
 
 Why it can't be static: the answer (the years) must not reach the browser before the
 player finishes. A static site would have to ship it.
@@ -34,19 +34,23 @@ player finishes. A static site would have to ship it.
 *Teaches: nothing pipeline-wise. This is the content source everything else serves.*
 
 ### Step 2 — Game service (local)
-- [ ] Python 3.13 again so tooling and CI carry over; framework — see Open decisions
-- [ ] Postgres locally via `docker compose` — not SQLite locally and Postgres in prod
-- [ ] Alembic from the first table: `puzzles`, `plays`
-- [ ] API:
+- [x] Python 3.13 again so tooling and CI carry over; Django 6.1
+- [x] Postgres locally via `docker compose` — not SQLite locally and Postgres in prod
+- [x] Django migrations from the first table: puzzles (+ their events), plays
+- [x] API:
       - `GET /api/puzzle/today` — events in shuffled order, **no years**
       - `POST /api/puzzle/{date}/guess` — per-position right/wrong, Wordle-style
       - years and article links only after a solve or when attempts run out
-- [ ] Attempt limit enforced on the server — 5 events is 120 orderings; with
+      - also held back until then: the source page link — it lists the years
+      - event ids are random letters, never database ids, which would sort into the answer
+- [x] Attempt limit enforced on the server — 5 events is 120 orderings; with
       per-position feedback and unlimited tries it's trivially brute-forced
-- [ ] Anonymous player ID in a cookie — no accounts yet
-- [ ] Server-rendered page (Jinja) + a little JS for drag-to-reorder. No frontend
-      build step, so the pipeline stays about the service
-- [ ] Shareable emoji result grid that doesn't reveal the order
+- [x] Anonymous player ID in a cookie — no accounts yet
+- [x] Server-rendered page (Django templates) + a little JS for drag-to-reorder. No
+      frontend build step, so the pipeline stays about the service
+      — built and served; still to check by hand in a browser, desktop and phone
+- [x] Shareable emoji result grid that doesn't reveal the order
+- [x] `manage.py generate_puzzle` — runs the Step 1 generator and stores the result
 
 *Teaches: why this needs a server at all. Anti-cheat is best-effort — a player can clear
 the cookie — the bar is "no answers in page source", not a fortress.*
@@ -55,8 +59,13 @@ the cookie — the bar is "no answers in page source", not a fortress.*
 You've done this before. Set it up before there's much to protect.
 - [ ] Tests, lint, type-check on PRs; branch protection
 - [ ] Postgres as a `services:` container in the workflow — tests hit a real database
-- [ ] Run migrations from empty in CI; `alembic check` fails if models and migrations drift
-- [ ] Leak test: render today's page and API response, assert none of the answer years appear
+- [ ] Run migrations from empty in CI; `makemigrations --check` fails if models and
+      migrations drift
+- [ ] Settings refuse to start without `DJANGO_SECRET_KEY` unless `DJANGO_DEBUG=1`, and
+      the mypy Django plugin imports them too — give the CI job one (any value will do)
+- [ ] Leak test: render today's page and API response, assert none of the answer years
+      appear — already written (`tests/test_game_views.py`, `TestNoAnswersBeforeTheReveal`,
+      which also checks article links and the source page); CI only has to run it
 
 *Teaches: service containers in CI, and testing an invariant rather than a function.*
 
@@ -221,20 +230,11 @@ Things to try once the base pipeline works. Not ordered.
 
 ## Open decisions
 
-- **Framework.** Accounts, roles and an admin panel (Steps 10–11) change the weighing:
-  - *FastAPI or Flask:* lightest, but login, sessions, roles and every admin page are
-    yours to build (Authlib for Google; SQLAdmin gives basic CRUD screens).
-  - *Django:* the closest Python match to Laravel + Filament — users, groups, permissions,
-    sessions, CSRF and a CRUD admin site built in; `django-allauth` adds Google login.
-    Its own migrations replace Alembic everywhere above (`makemigrations --check` does
-    what `alembic check` does). The admin site is plainer than Filament: the stats
-    dashboard and the puzzle picker would be custom staff-only pages.
-  - *Laravel + Filament:* the best admin panel of the three (dashboard widgets, charts,
-    policies), Socialite for Google, and you already know it. Cost: the Python tooling
-    and CI from the proverb app don't carry over — Composer, Pest/PHPUnit, PHPStan, and a
-    PHP-FPM + web server image. The pipeline lessons themselves transfer unchanged.
-  - Suggested: Django. Same language and CI as the proverb app, and most of what you'd
-    reach for Filament for comes built in.
+- **Framework.** *Decided: Django.* Same language and CI as the proverb app; users,
+  permissions, sessions, CSRF and an admin site come built in, and `django-allauth`
+  adds Google login (Step 10). Django's migrations replace Alembic. Its admin site is
+  plainer than Filament: the stats dashboard and puzzle picker (Step 11) will be custom
+  staff-only pages.
 - **Host.**
   - *Google Cloud Run + Neon:* containers in, revisions out — rollback and canary are
     built in, and you already have a GCP billing account from the proverb app. Scales
@@ -250,7 +250,9 @@ Things to try once the base pipeline works. Not ordered.
   The player's local date is friendlier, but up to three puzzles are live at once
   (UTC−12 to UTC+14), the server must refuse dates further out than that, and tomorrow's
   puzzle must be approved by 10:00 UTC. Start with UTC.
-- **Puzzle shape.** 5 events, 3 attempts? Per-position feedback, or only "N correct"?
+- **Puzzle shape.** *Decided: 5 events, 4 attempts, per-position feedback.* Three left
+  too little room for a player who knows little history to reason from the feedback.
+  One constant to change: `MAX_ATTEMPTS` in `game/rules.py`.
 - **Event pool.** Only today's date (fits "On this day") or any date (more variety,
   fewer yearly repeats)?
 - **Puzzle approval once the admin panel exists.** Decide at Step 11.

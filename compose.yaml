@@ -1,0 +1,26 @@
+# Local Postgres for development and tests: `docker compose up -d`.
+#
+# The same database engine as production, so local runs and tests catch what
+# production would. Keep the major version in step with the hosted database
+# once one is picked (Step 5). Data survives restarts in the `pgdata` volume;
+# `docker compose down -v` wipes it.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: wcf
+      POSTGRES_PASSWORD: wcf
+      POSTGRES_DB: wcf
+    ports:
+      # Bound to localhost only: nothing else on the network can reach it.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wcf -d wcf"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  pgdata:

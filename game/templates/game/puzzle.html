@@ -1,0 +1,47 @@
+{% extends "game/base.html" %}
+{% load static %}
+
+{% block subtitle %}<p class="date">{{ day|date:"l j F Y" }}</p>{% endblock %}
+
+{% block content %}
+<p class="intro">
+  Put these events in order, earliest at the top. After each try you'll see
+  which places are right.
+</p>
+
+<section id="play" aria-label="Your order">
+  <p id="status" class="status" aria-live="polite"></p>
+  <p class="end-label">Earliest</p>
+  <ol id="events" class="events"></ol>
+  <p class="end-label">Latest</p>
+  <button id="submit" type="button" class="primary">Check order</button>
+  <p id="error" class="error" role="alert" hidden></p>
+</section>
+
+<section id="history" class="history" aria-label="Your tries" hidden></section>
+
+<section id="reveal" class="reveal" hidden>
+  <h2 data-reveal="message"></h2>
+  <ol class="answer" data-reveal="events"></ol>
+  <p class="source">
+    Today's events come from
+    <a data-reveal="source" href="https://en.wikipedia.org/">Wikipedia's “On this day”</a>.
+  </p>
+  <div class="share">
+    <pre data-reveal="share-text"></pre>
+    <button type="button" data-reveal="share-button">Copy result</button>
+    <span data-reveal="share-status" aria-live="polite"></span>
+  </div>
+</section>
+
+<noscript><p class="error">This game needs JavaScript to move the events around.</p></noscript>
+
+<footer class="credit">
+  {{ state.credit.text }} ·
+  <a href="{{ state.credit.license_url }}" rel="license">license</a>
+</footer>
+
+{{ state|json_script:"puzzle-state" }}
+{% endblock %}
+
+{% block scripts %}<script type="module" src="{% static 'game/puzzle.js' %}"></script>{% endblock %}

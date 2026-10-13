@@ -26,9 +26,8 @@ from pathlib import Path
 from puzzle_generator import __version__
 from puzzle_generator.config import ConfigError, GeneratorSettings
 from puzzle_generator.feed import FEED_TYPES, FeedError
-from puzzle_generator.generator import PuzzleGenerator
-from puzzle_generator.http_client import HttpClient, HttpError
-from puzzle_generator.models import Puzzle
+from puzzle_generator.generator import generate_puzzle
+from puzzle_generator.http_client import HttpError
 from puzzle_generator.selection import NotEnoughEvents
 from puzzle_generator.serialization import PuzzleSerializer
 from puzzle_generator.storage import PuzzleStore
@@ -117,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_OK
 
     try:
-        puzzle = _generate(settings, day)
+        puzzle = generate_puzzle(settings, day)
     except NotEnoughEvents as exc:
         log.error("%s: %s", day, exc)
         return EXIT_NO_PUZZLE
@@ -131,16 +130,6 @@ def main(argv: list[str] | None = None) -> int:
         path = store.save(puzzle)
         print(f"{day}: wrote {path} ({len(puzzle.events)} events)")
     return EXIT_OK
-
-
-def _generate(settings: GeneratorSettings, day: date) -> Puzzle:
-    with HttpClient(
-        settings.user_agent,
-        timeout=settings.request_timeout,
-        max_retries=settings.max_retries,
-        backoff_factor=settings.backoff_factor,
-    ) as http:
-        return PuzzleGenerator.from_settings(settings, http).generate(day)
 
 
 def _print_json(text: str) -> None:

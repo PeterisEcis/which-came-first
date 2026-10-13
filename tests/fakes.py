@@ -9,12 +9,19 @@ builders cut the shape down to the fields the generator reads, plus an extract.
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
-from puzzle_generator.models import Article, Event
+from puzzle_generator.models import Article, Attribution, Event, Puzzle
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+ANSWER_YEARS = (1066, 1307, 1492, 1588, 1815)
+"""The years in `generated_puzzle`. None of them appears in a date this decade,
+so finding one in a response means an answer leaked."""
+
+SOURCE_URL = "https://en.wikipedia.org/wiki/Wikipedia:Selected_anniversaries/October_13"
 
 
 def load_fixture(name: str) -> dict[str, Any]:
@@ -65,6 +72,24 @@ def feed_entry(year: int, text: str, *links: str) -> dict[str, Any]:
 
 def feed_payload(*entries: dict[str, Any], feed: str = "selected") -> dict[str, Any]:
     return {feed: list(entries)}
+
+
+def generated_puzzle(day: date) -> Puzzle:
+    """A five-event puzzle as the generator would hand it over.
+
+    Each event links an article whose title contains its year, the way
+    "Siege of Port Royal (1710)" does in the real feed, so a leaked link shows
+    up as a leaked year.
+    """
+    return Puzzle(
+        puzzle_date=day,
+        feed="selected",
+        events=tuple(
+            event(year, f"Article {year}", text=f"Something notable happened, part {letter}")
+            for year, letter in zip(ANSWER_YEARS, "ABCDE", strict=True)
+        ),
+        attribution=Attribution(source_url=SOURCE_URL, adapted=False),
+    )
 
 
 def event(year: int, *links: str, text: str = "") -> Event:

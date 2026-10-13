@@ -12,6 +12,11 @@ CC_BY_SA_NAME = "CC BY-SA 4.0"
 CC_BY_SA_URL = "https://creativecommons.org/licenses/by-sa/4.0/"
 
 
+def year_label(year: int) -> str:
+    """A year as a player reads it: `1812`, or `474 BCE` for the feed's -474."""
+    return f"{-year} BCE" if year < 0 else str(year)
+
+
 @dataclass(frozen=True)
 class Article:
     """A Wikipedia article an event links to.
@@ -39,8 +44,7 @@ class Event:
 
     @property
     def year_label(self) -> str:
-        """The year as a player reads it: `1812`, or `474 BCE`."""
-        return f"{-self.year} BCE" if self.year < 0 else str(self.year)
+        return year_label(self.year)
 
 
 @dataclass(frozen=True)

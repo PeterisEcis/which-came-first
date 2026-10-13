@@ -15,11 +15,25 @@ from puzzle_generator.cleaning import EventCleaner
 from puzzle_generator.config import GeneratorSettings
 from puzzle_generator.fairness import FairnessChecker
 from puzzle_generator.feed import OnThisDayClient
-from puzzle_generator.http_client import JsonFetcher
+from puzzle_generator.http_client import HttpClient, JsonFetcher
 from puzzle_generator.models import Attribution, Puzzle
 from puzzle_generator.selection import EventSelector
 
 log = logging.getLogger(__name__)
+
+
+def generate_puzzle(settings: GeneratorSettings, day: date) -> Puzzle:
+    """Generate `day`'s puzzle over a fresh HTTP client, closed afterwards.
+
+    The one-call version, for the command line and the Django command.
+    """
+    with HttpClient(
+        settings.user_agent,
+        timeout=settings.request_timeout,
+        max_retries=settings.max_retries,
+        backoff_factor=settings.backoff_factor,
+    ) as http:
+        return PuzzleGenerator.from_settings(settings, http).generate(day)
 
 
 class PuzzleGenerator:

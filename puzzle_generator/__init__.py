@@ -3,8 +3,8 @@
 Turns one date's entries in Wikipedia's "On this day" feed into a puzzle: five
 events that can be put in order fairly, with their years and article links.
 
-Plain Python, no Django. The game service (Step 2) imports it, and a management
-command there takes over from `cli.py`; nothing in here has to change for that.
+Plain Python, no Django. The game service imports it: `manage.py generate_puzzle`
+calls `generate_puzzle()` and stores the result, the way `cli.py` writes a file.
 
 Layout of the package:
 
