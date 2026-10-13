@@ -1,0 +1,17 @@
+# Generated puzzles. They hold the answers, and Step 2 moves them into the database.
+output/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Secrets
+.env

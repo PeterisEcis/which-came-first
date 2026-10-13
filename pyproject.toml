@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "which-came-first"
+version = "0.1.0"
+description = "A daily \"which came first?\" game built from Wikipedia's On this day feed."
+requires-python = ">=3.13"
+dependencies = [
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "types-requests",
+]
+
+[tool.setuptools.packages.find]
+# Flat layout rather than src/: Django (Step 2) keeps its project and apps at the
+# root next to manage.py, and the generator sits beside them.
+include = ["puzzle_generator*"]
+
+[tool.ruff]
+line-length = 100
+src = [".", "tests"]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplification
+    "RUF",
+]
+
+[tool.mypy]
+python_version = "3.13"
+files = ["puzzle_generator"]
+strict = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
