@@ -1,4 +1,4 @@
-"""WSGI entry point, for the production server in Step 4."""
+"""WSGI entry point, for gunicorn in the container (see config/entrypoint.py)."""
 
 from __future__ import annotations
 

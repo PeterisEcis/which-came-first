@@ -14,6 +14,11 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "requests>=2.31",
     "python-dotenv>=1.0",
+    # The production web server, in the container. It doesn't run on Windows:
+    # locally, `manage.py runserver` stands in.
+    "gunicorn>=26.0",
+    # Serves the CSS and JS from the same process, so no separate file server.
+    "whitenoise>=6.12",
 ]
 
 [project.optional-dependencies]

@@ -85,7 +85,10 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First, so probes are answered before the host check and the player cookie.
+    "config.health.HealthCheckMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -129,6 +132,14 @@ TIME_ZONE = "UTC"
 USE_TZ = True
 
 STATIC_URL = "static/"
+# Filled by `collectstatic`, which the image build runs (see Dockerfile).
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    # File names carry a hash of their contents, so browsers can cache them for
+    # good and a deploy never pairs a new page with an old puzzle.js.
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
 
 LOGGING = {
     "version": 1,
@@ -138,5 +149,6 @@ LOGGING = {
     "loggers": {
         "puzzle_generator": {"handlers": ["console"], "level": "INFO"},
         "game": {"handlers": ["console"], "level": "INFO"},
+        "config": {"handlers": ["console"], "level": "INFO"},
     },
 }
