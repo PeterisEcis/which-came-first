@@ -5,7 +5,6 @@ players put them in chronological order. The real goal is learning the CI/CD ste
 proverb app had no reason to need: a real service, a database, migrations, deploys with
 rollback, and a human approval gate. Each one is required here, not contrived.
 
-**Current tier: Step 2 built; the page needs a check in a real browser. No GitHub Pages — a real service from day one.**
 
 Why it can't be static: the answer (the years) must not reach the browser before the
 player finishes. A static site would have to ship it.
@@ -57,15 +56,19 @@ the cookie — the bar is "no answers in page source", not a fortress.*
 
 ### Step 3 — CI gate from day one
 You've done this before. Set it up before there's much to protect.
-- [ ] Tests, lint, type-check on PRs; branch protection
-- [ ] Postgres as a `services:` container in the workflow — tests hit a real database
-- [ ] Run migrations from empty in CI; `makemigrations --check` fails if models and
+- [x] Tests, lint, type-check on PRs and pushes to `main` — `.github/workflows/ci.yml`,
+      rehearsed locally against an empty database with debug off
+- [ ] First green run on GitHub — push, then check the Actions tab
+- [ ] Branch protection: require the `checks` job before merging into `main` — not
+      available on a private repo with GitHub Free (see Open decisions: repo visibility)
+- [x] Postgres as a `services:` container in the workflow — tests hit a real database
+- [x] Run migrations from empty in CI; `makemigrations --check` fails if models and
       migrations drift
-- [ ] Settings refuse to start without `DJANGO_SECRET_KEY` unless `DJANGO_DEBUG=1`, and
-      the mypy Django plugin imports them too — give the CI job one (any value will do)
-- [ ] Leak test: render today's page and API response, assert none of the answer years
-      appear — already written (`tests/test_game_views.py`, `TestNoAnswersBeforeTheReveal`,
-      which also checks article links and the source page); CI only has to run it
+- [x] Settings refuse to start without `DJANGO_SECRET_KEY` unless `DJANGO_DEBUG=1`, and
+      the mypy Django plugin imports them too — the CI job gets a throwaway one
+- [x] Leak test: render today's page and API response, assert none of the answer years
+      appear — `TestNoAnswersBeforeTheReveal` in `tests/test_game_views.py`, which also
+      checks article links and the source page; runs in the Tests step
 
 *Teaches: service containers in CI, and testing an invariant rather than a function.*
 
