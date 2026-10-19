@@ -58,8 +58,8 @@ the cookie — the bar is "no answers in page source", not a fortress.*
 You've done this before. Set it up before there's much to protect.
 - [x] Tests, lint, type-check on PRs and pushes to `main` — `.github/workflows/ci.yml`,
       rehearsed locally against an empty database with debug off
-- [ ] First green run on GitHub — push, then check the Actions tab
-- [ ] Branch protection: require the `checks` job before merging into `main` — not
+- [x] First green run on GitHub — push, then check the Actions tab
+- [x] Branch protection: require the `checks` job before merging into `main` — not
       available on a private repo with GitHub Free (see Open decisions: repo visibility)
 - [x] Postgres as a `services:` container in the workflow — tests hit a real database
 - [x] Run migrations from empty in CI; `makemigrations --check` fails if models and
