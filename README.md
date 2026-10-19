@@ -8,6 +8,11 @@ So far:
 - **Step 1, the puzzle generator** (`puzzle_generator/`): plain Python, no Django.
 - **Step 2, the game service** (`config/`, `game/`): Django and Postgres. A page
   with drag-to-reorder, a small JSON API, and anonymous players.
+- **Step 3, CI** (`.github/workflows/ci.yml`): tests against a real Postgres,
+  lint, formatting, types and migrations, on every pull request and push to `main`.
+- **Step 4, the container** (`Dockerfile`): one image for the server, the
+  migrations and the generator. CI builds and smoke-tests it, and on `main`
+  pushes it to ghcr.io tagged with the commit.
 
 ## Setup
 
@@ -38,6 +43,24 @@ unless someone has played it. `--date YYYY-MM-DD` picks another day.
 
 To look at the stored puzzles (answers included), make an admin user with
 `python manage.py createsuperuser` and open http://127.0.0.1:8000/admin/.
+
+## Run the production image
+
+The image as a host will run it: gunicorn, debug off, static files from
+WhiteNoise. Against the compose database:
+
+```powershell
+docker compose up --build app                 # http://localhost:8080
+docker compose run --rm app migrate
+docker compose run --rm app generate          # same flags as generate_puzzle
+```
+
+The image takes one of three commands, `serve` (the default), `migrate` and
+`generate`, described at the top of `config/entrypoint.py`. Any other command
+goes to `manage.py`, e.g. `docker compose run --rm app createsuperuser`.
+
+The server listens on `0.0.0.0:$PORT` (default 8000). `/healthz` answers while
+the process is up; `/readyz` only while it can also reach the database.
 
 ## Generate a puzzle file without the database
 

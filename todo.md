@@ -73,15 +73,25 @@ You've done this before. Set it up before there's much to protect.
 *Teaches: service containers in CI, and testing an invariant rather than a function.*
 
 ### Step 4 — Containers
-- [ ] One image, three commands: `serve`, `generate`, `migrate` — migrations always
-      ship with the code that expects them
-- [ ] Multi-stage Dockerfile, slim base, non-root user
-- [ ] `.dockerignore` — keep `.env` out of the image
-- [ ] Tag by commit SHA, deploy by digest; never deploy `latest`
-- [ ] Push to GHCR (or Artifact Registry — see Open decisions)
-- [ ] `/healthz` (process is up) and `/readyz` (database reachable)
-- [ ] Expect the classic failure: the server binds `127.0.0.1` inside the container and
+- [x] One image, three commands: `serve`, `generate`, `migrate` — migrations always
+      ship with the code that expects them — `config/entrypoint.py`; anything else
+      goes to `manage.py`
+- [x] Multi-stage Dockerfile, slim base, non-root user — the code belongs to root, so
+      the server can't change it
+- [x] `.dockerignore` — keep `.env` out of the image — an allowlist, so anything new
+      stays out too
+- [x] Static files without a separate server: WhiteNoise, hashed names, cached for good
+- [x] Tag by commit SHA, never `latest` — the image job's summary records the digest
+      for Step 5 to deploy by
+- [ ] Push to GHCR (or Artifact Registry — see Open decisions) — GHCR for now, as it
+      needs no setup; the image job pushes on every push to `main`. After the first
+      push, check the package's visibility on GitHub (Packages)
+- [ ] Require the `image` job in the `main` ruleset too, once it has run
+- [x] `/healthz` (process is up) and `/readyz` (database reachable) — answered before
+      the host check, since probes often send an IP address as Host
+- [x] Expect the classic failure: the server binds `127.0.0.1` inside the container and
       nothing reaches it. Bind `0.0.0.0` and read `PORT` from the environment.
+      — the image job reaches the server through a published port, on 8080
 
 *Teaches: registries, image tags as deploy units.*
 
@@ -91,6 +101,11 @@ You've done this before. Set it up before there's much to protect.
 - [ ] Deploy on merge to `main`
 - [ ] Authenticate Actions to the host with OIDC (Workload Identity Federation on GCP)
       instead of a stored key — no long-lived credential to leak or rotate
+- [ ] Behind the host's HTTPS proxy, Django sees plain HTTP and CSRF refuses every
+      guess (the browser's Origin is `https://`). Set `SECURE_PROXY_SSL_HEADER` — only
+      if the proxy always sets that header — or `CSRF_TRUSTED_ORIGINS`
+- [ ] Size gunicorn for the host: one sync worker by default, so one request at a
+      time. `WEB_CONCURRENCY`, or `serve --workers N --threads N`
 - [ ] Post-deploy smoke test: a scripted player hits `/readyz`, fetches today's puzzle,
       submits a guess, and checks the response contains no years
 - [ ] Mark smoke-test plays so they don't count in player stats
@@ -216,6 +231,8 @@ Things to try once the base pipeline works. Not ordered.
 - [ ] Same app on a second host (Oracle VM) — see what's portable
 - [ ] Deploy freeze around 00:00 UTC, when the puzzle rolls over
 - [ ] Renovate or Dependabot, including the base image
+- [ ] Lock dependency versions. The `checks` job and the image build each resolve
+      pyproject's ranges on their own, so the image can get versions the tests never ran
 
 ### Game
 - [ ] Player's local date instead of UTC (see Open decisions)

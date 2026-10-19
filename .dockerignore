@@ -1,0 +1,12 @@
+# An allowlist: nothing goes into the image unless it is named here. Anything
+# new stays out by default -- a .env with real secrets, a puzzle file in
+# output/ with its answers, a .venv built for Windows.
+*
+!config/
+!game/
+!puzzle_generator/
+!manage.py
+!pyproject.toml
+
+# Bytecode from a local run, compiled for whatever Python made it.
+**/__pycache__

@@ -15,3 +15,7 @@ dist/
 
 # Secrets
 .env
+
+# Django
+# collectstatic's output. Only the image build runs it.
+staticfiles/

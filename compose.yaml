@@ -22,5 +22,29 @@ services:
       timeout: 5s
       retries: 15
 
+  # The production image against the database above, debug off. Not started by
+  # a plain `docker compose up -d`; name it:
+  #
+  #     docker compose up --build app                 http://localhost:8080
+  #     docker compose run --rm app migrate
+  #     docker compose run --rm app generate --date 2026-10-20
+  app:
+    build: .
+    profiles: [app]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://wcf:wcf@db:5432/wcf
+      DJANGO_SECRET_KEY: compose-only-not-a-secret
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      # From .env, which compose reads for ${...} values. The image itself
+      # never sees that file.
+      WCF_CONTACT: ${WCF_CONTACT:-}
+      # 8080, not 8000, to leave room for `manage.py runserver`.
+      PORT: "8080"
+    ports:
+      - "127.0.0.1:8080:8080"
+
 volumes:
   pgdata:

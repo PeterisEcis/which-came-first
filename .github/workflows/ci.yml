@@ -97,3 +97,108 @@ jobs:
       - name: Type-check
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: mypy
+
+  # Builds the image and runs it the way a host would. On main it then pushes
+  # that same image to GitHub's registry, ghcr.io, tagged with the commit.
+  # Meant as a required check, like `checks`; the same note on renaming applies.
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # To push to ghcr.io. Only the push step, on main, uses it.
+      packages: write
+
+    # An empty database again. No ports: the app container joins this
+    # database's network and finds it by its name, `postgres`.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: wcf
+          POSTGRES_PASSWORD: wcf
+          POSTGRES_DB: wcf
+        options: >-
+          --health-cmd "pg_isready -U wcf -d wcf"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+
+    # For the app container, not for this job's steps: each `docker run` passes
+    # them in with -e. PORT isn't 8000, so a server that ignores it fails.
+    env:
+      DATABASE_URL: postgres://wcf:wcf@postgres:5432/wcf
+      DJANGO_SECRET_KEY: ci-only-not-a-secret
+      DJANGO_ALLOWED_HOSTS: localhost
+      PORT: "8080"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Name the image
+        # ghcr.io/OWNER/REPO:COMMIT. Tagged with the full commit SHA, never
+        # `latest`, so a tag always means one build. The registry wants the
+        # name in lowercase.
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+      - name: Build
+        # The source label links the package on ghcr.io to this repository.
+        run: >-
+          docker build
+          --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}"
+          --label "org.opencontainers.image.revision=${{ github.sha }}"
+          --tag "$IMAGE" .
+
+      - name: Migrate
+        run: >-
+          docker run --rm --network ${{ job.services.postgres.network }}
+          -e DATABASE_URL -e DJANGO_SECRET_KEY -e DJANGO_ALLOWED_HOSTS
+          "$IMAGE" migrate
+
+      - name: Serve
+        # Through a published port, as a host reaches it. A server listening on
+        # 127.0.0.1 inside the container would be unreachable here.
+        run: >-
+          docker run --detach --name app --network ${{ job.services.postgres.network }} --publish "$PORT:$PORT"
+          -e PORT -e DATABASE_URL -e DJANGO_SECRET_KEY -e DJANGO_ALLOWED_HOSTS
+          "$IMAGE"
+
+      - name: Smoke test
+        run: |
+          for _ in $(seq 30); do
+            curl --fail --silent "localhost:$PORT/healthz" > /dev/null && break
+            sleep 1
+          done
+          curl --fail --silent --show-error "localhost:$PORT/healthz"
+          curl --fail --silent --show-error "localhost:$PORT/readyz"
+
+          # The database has no puzzles, so the page says so, with a 404 -- which
+          # still renders the real templates.
+          status=$(curl --silent --output page.html --write-out '%{http_code}' "localhost:$PORT/")
+          if [ "$status" != 404 ]; then
+            echo "::error::Expected the page's 404 for no puzzle today, got $status"
+            exit 1
+          fi
+
+          # The stylesheet it links, under its hashed name, served by WhiteNoise.
+          css=$(grep --only-matching '/static/game/puzzle\.[0-9a-f]*\.css' page.html)
+          curl --fail --silent --show-error --output /dev/null "localhost:$PORT$css"
+
+      - name: Server logs
+        if: ${{ failure() }}
+        run: docker logs app
+
+      - name: Push
+        # Main only. A pull request's image is built, tested and thrown away.
+        if: ${{ github.event_name == 'push' }}
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE"
+
+          # The digest names these exact bytes: a tag can be moved, a digest
+          # can't. Deploys (Step 5) go by digest. Asked of the registry itself,
+          # which knows the image only by the name it was pushed under.
+          digest=$(docker buildx imagetools inspect "$IMAGE" --format '{{.Manifest.Digest}}')
+          echo "Pushed \`${IMAGE%:*}@$digest\`" >> "$GITHUB_STEP_SUMMARY"
