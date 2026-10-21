@@ -83,12 +83,14 @@ You've done this before. Set it up before there's much to protect.
 - [x] Static files without a separate server: WhiteNoise, hashed names, cached for good
 - [x] Tag by commit SHA, never `latest` — the image job's summary records the digest
       for Step 5 to deploy by
-- [ ] Push to GHCR (or Artifact Registry — see Open decisions) — GHCR for now, as it
+- [x] Push to GHCR (or Artifact Registry — see Open decisions) — GHCR for now, as it
       needs no setup; the image job pushes on every push to `main`. After the first
       push, check the package's visibility on GitHub (Packages)
-- [ ] Require the `image` job in the `main` ruleset too, once it has run
-- [x] `/healthz` (process is up) and `/readyz` (database reachable) — answered before
-      the host check, since probes often send an IP address as Host
+- [x] Require the `image` job in the `main` ruleset too, once it has run
+- [x] `/health` (process is up) and `/ready` (database reachable) — answered before
+      the host check, since probes often send an IP address as Host. Were `/healthz`
+      and `/readyz`, until Cloud Run's front end answered `/healthz` with its own 404:
+      it keeps some paths ending in "z" for itself
 - [x] Expect the classic failure: the server binds `127.0.0.1` inside the container and
       nothing reaches it. Bind `0.0.0.0` and read `PORT` from the environment.
       — the image job reaches the server through a published port, on 8080
@@ -106,7 +108,7 @@ You've done this before. Set it up before there's much to protect.
       if the proxy always sets that header — or `CSRF_TRUSTED_ORIGINS`
 - [ ] Size gunicorn for the host: one sync worker by default, so one request at a
       time. `WEB_CONCURRENCY`, or `serve --workers N --threads N`
-- [ ] Post-deploy smoke test: a scripted player hits `/readyz`, fetches today's puzzle,
+- [ ] Post-deploy smoke test: a scripted player hits `/ready`, fetches today's puzzle,
       submits a guess, and checks the response contains no years
 - [ ] Mark smoke-test plays so they don't count in player stats
 - [ ] Automatic rollback when the smoke test fails
@@ -241,7 +243,7 @@ Things to try once the base pipeline works. Not ordered.
 - [ ] Event images, only where the file is freely licensed (see Constraints)
 
 ### Operations
-- [ ] Uptime monitor on `/readyz`
+- [ ] Uptime monitor on `/ready`
 - [ ] Structured logs, error tracking (Sentry free tier)
 - [ ] Rate limiting on the guess endpoint
 - [ ] Load test the rollover spike (k6) — everyone's puzzle changes at once

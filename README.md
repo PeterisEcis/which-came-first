@@ -59,8 +59,9 @@ The image takes one of three commands, `serve` (the default), `migrate` and
 `generate`, described at the top of `config/entrypoint.py`. Any other command
 goes to `manage.py`, e.g. `docker compose run --rm app createsuperuser`.
 
-The server listens on `0.0.0.0:$PORT` (default 8000). `/healthz` answers while
-the process is up; `/readyz` only while it can also reach the database.
+The server listens on `0.0.0.0:$PORT` (default 8000). `/health` answers while
+the process is up; `/ready` only while it can also reach the database. (Not
+`/healthz` and `/readyz`: Cloud Run keeps some paths ending in "z" for itself.)
 
 ## Generate a puzzle file without the database
 
