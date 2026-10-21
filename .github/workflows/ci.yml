@@ -166,11 +166,11 @@ jobs:
       - name: Smoke test
         run: |
           for _ in $(seq 30); do
-            curl --fail --silent "localhost:$PORT/healthz" > /dev/null && break
+            curl --fail --silent "localhost:$PORT/health" > /dev/null && break
             sleep 1
           done
-          curl --fail --silent --show-error "localhost:$PORT/healthz"
-          curl --fail --silent --show-error "localhost:$PORT/readyz"
+          curl --fail --silent --show-error "localhost:$PORT/health"
+          curl --fail --silent --show-error "localhost:$PORT/ready"
 
           # The database has no puzzles, so the page says so, with a 404 -- which
           # still renders the real templates.

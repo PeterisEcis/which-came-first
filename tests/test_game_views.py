@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from django.http import HttpResponse
 from django.test import Client
+from pytest_django import Settings
 
 from fakes import ANSWER_YEARS, SOURCE_URL, generated_puzzle
 from game.importer import PuzzleImporter
@@ -279,3 +280,38 @@ class TestCsrf:
         )
 
         assert response.status_code == 200
+
+    def test_through_an_https_proxy_a_guess_goes_through(
+        self, settings: Settings, puzzle: Puzzle, answer: list[str]
+    ) -> None:
+        # What config/settings.py sets when DJANGO_BEHIND_HTTPS_PROXY=1.
+        settings.SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+        assert guess_through_an_https_proxy(puzzle, answer).status_code == 200
+
+    def test_through_an_https_proxy_not_trusted_a_guess_is_refused(
+        self, puzzle: Puzzle, answer: list[str]
+    ) -> None:
+        # Django takes the request for http://, which the https:// Origin doesn't match.
+        assert guess_through_an_https_proxy(puzzle, answer).status_code == 403
+
+
+def guess_through_an_https_proxy(puzzle: Puzzle, order: list[str]) -> HttpResponse:
+    """A browser's guess as Cloud Run's front end passes it on: in plain HTTP,
+    with the browser's https:// Origin and X-Forwarded-Proto saying it was HTTPS."""
+    client = Client(enforce_csrf_checks=True)
+    client.get(PAGE)
+    return client.post(
+        guess_url(puzzle.date),
+        data=json.dumps({"order": order}),
+        content_type="application/json",
+        headers={
+            "X-CSRFToken": client.cookies["csrftoken"].value,
+            # As a browser sends it. Without Host the test client falls back to
+            # its server port, 80, which isn't HTTPS's: the host would become
+            # testserver:80 and match no Origin.
+            "Host": "testserver",
+            "Origin": "https://testserver",
+            "X-Forwarded-Proto": "https",
+        },
+    )

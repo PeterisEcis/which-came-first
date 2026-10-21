@@ -19,3 +19,5 @@ dist/
 # Django
 # collectstatic's output. Only the image build runs it.
 staticfiles/
+.neon
+node_modules/
