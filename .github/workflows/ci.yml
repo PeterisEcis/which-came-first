@@ -99,11 +99,14 @@ jobs:
         run: mypy
 
   # Builds the image and runs it the way a host would. On main it then pushes
-  # that same image to GitHub's registry, ghcr.io, tagged with the commit.
+  # that same image to GitHub's registry, ghcr.io, tagged with the commit, and
+  # hands its digest to the deploy job.
   # Meant as a required check, like `checks`; the same note on renaming applies.
   image:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
     permissions:
       contents: read
       # To push to ghcr.io. Only the push step, on main, uses it.
@@ -189,6 +192,7 @@ jobs:
         run: docker logs app
 
       - name: Push
+        id: push
         # Main only. A pull request's image is built, tested and thrown away.
         if: ${{ github.event_name == 'push' }}
         env:
@@ -198,7 +202,75 @@ jobs:
           docker push "$IMAGE"
 
           # The digest names these exact bytes: a tag can be moved, a digest
-          # can't. Deploys (Step 5) go by digest. Asked of the registry itself,
+          # can't. The deploy job goes by digest. Asked of the registry itself,
           # which knows the image only by the name it was pushed under.
           digest=$(docker buildx imagetools inspect "$IMAGE" --format '{{.Manifest.Digest}}')
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "Pushed \`${IMAGE%:*}@$digest\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # On main, once both checks pass, the image the `image` job just tested goes
+  # to Cloud Run as a new revision with no traffic. It is smoke-tested at its own
+  # URL and gets the traffic only if that passes; otherwise the previous revision
+  # keeps serving and players never see the bad one.
+  # Not a required check: it never runs on a pull request, so requiring it would
+  # block every merge. Runs on main already queue one at a time (the
+  # `concurrency` group above), so two deploys never overlap.
+  deploy:
+    needs: [checks, image]
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # To ask GitHub for an OIDC token, which Google trades for credentials that
+      # last an hour. No key is stored anywhere, so there is none to leak.
+      id-token: write
+
+    env:
+      PROJECT: which-came-first-512315
+      REGION: europe-west1
+      SERVICE: wcf
+      # The URL a revision tagged `candidate` gets of its own, traffic or not.
+      CANDIDATE_URL: https://candidate---wcf-801031466819.europe-west1.run.app
+
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          # The provider admits tokens from this repository's main branch only.
+          workload_identity_provider: projects/801031466819/locations/global/workloadIdentityPools/github/providers/which-came-first
+          # Can deploy revisions and move traffic, and nothing else.
+          service_account: wcf-deploy@which-came-first-512315.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - name: Deploy without traffic
+        # Through the `ghcr` remote repository in Artifact Registry, by digest.
+        # Only the image changes: the service account, secrets and settings
+        # carry over from the current revision.
+        run: >-
+          gcloud run deploy "$SERVICE" --project="$PROJECT" --region="$REGION"
+          --image="$REGION-docker.pkg.dev/$PROJECT/ghcr/${GITHUB_REPOSITORY,,}@${{ needs.image.outputs.digest }}"
+          --no-traffic --tag=candidate
+
+      - name: Smoke test
+        # GET requests only, which never write to the database, so this is safe
+        # against production on every deploy. The retries ride out a cold start.
+        run: |
+          curl --fail --silent --show-error --retry 3 "$CANDIDATE_URL/health"
+          curl --fail --silent --show-error --retry 3 "$CANDIDATE_URL/ready"
+
+          # Today's puzzle, or "no puzzle today" if none was generated: both
+          # render the real templates.
+          status=$(curl --silent --show-error --retry 3 --output page.html --write-out '%{http_code}' "$CANDIDATE_URL/")
+          if [ "$status" != 200 ] && [ "$status" != 404 ]; then
+            echo "::error::Expected the puzzle page (200) or no puzzle today (404), got $status"
+            exit 1
+          fi
+
+          css=$(grep --only-matching '/static/game/puzzle\.[0-9a-f]*\.css' page.html)
+          curl --fail --silent --show-error --retry 3 --output /dev/null "$CANDIDATE_URL$css"
+
+      - name: Move the traffic
+        run: >-
+          gcloud run services update-traffic "$SERVICE" --project="$PROJECT" --region="$REGION"
+          --to-tags=candidate=100
