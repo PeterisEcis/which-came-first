@@ -98,27 +98,68 @@ You've done this before. Set it up before there's much to protect.
 *Teaches: registries, image tags as deploy units.*
 
 ### Step 5 — Hosting + real CD
-- [ ] Pick a host (see Open decisions)
-- [ ] Hosted Postgres — Neon or Supabase free tier
-- [ ] Deploy on merge to `main`
+- [x] Pick a host (see Open decisions) — Cloud Run, `europe-west1`, service `wcf`:
+      https://wcf-801031466819.europe-west1.run.app
+- [x] Hosted Postgres — Neon or Supabase free tier — Neon, `aws-eu-central-1`
+      (Frankfurt), branch `production`. The app goes through Neon's pooler
+      (`DATABASE_URL`), `migrate` connects directly (`DATABASE_URL_UNPOOLED`)
+- [x] Secrets in Secret Manager, not in the service's settings: `wcf-database-url`,
+      `wcf-secret-key`. Only the service's own account `wcf-run` reads them — not the
+      default compute account, which can edit the whole project. The service pins a
+      secret version, so a new value means a new version and a new revision
+- [x] Cloud Run pulls from GHCR through an Artifact Registry remote repository
+      (`ghcr`), by digest. Works while the GHCR package is public; a private one
+      would need a token stored for the proxy
+- [x] A 500 logs its traceback (`django.request`) — Django prints it only with DEBUG
+      on, so Cloud Run's logs showed the 500 and nothing about why. `/ready` reports
+      an unusable `DATABASE_URL` as 503 with the reason
+- [ ] Deploy on merge to `main`:
+      - the image job hands its digest to the deploy job as a job output
+      - deploy with `--no-traffic --tag=candidate`, smoke-test the tag's own URL,
+        then `update-traffic --to-tags=candidate=100`
 - [ ] Authenticate Actions to the host with OIDC (Workload Identity Federation on GCP)
       instead of a stored key — no long-lived credential to leak or rotate
-- [ ] Behind the host's HTTPS proxy, Django sees plain HTTP and CSRF refuses every
+- [x] Behind the host's HTTPS proxy, Django sees plain HTTP and CSRF refuses every
       guess (the browser's Origin is `https://`). Set `SECURE_PROXY_SSL_HEADER` — only
       if the proxy always sets that header — or `CSRF_TRUSTED_ORIGINS`
-- [ ] Size gunicorn for the host: one sync worker by default, so one request at a
+      — `DJANGO_BEHIND_HTTPS_PROXY=1` sets it; `*.run.app` redirects plain HTTP before
+      it reaches the container. Checked by solving a puzzle in production
+- [x] Size gunicorn for the host: one sync worker by default, so one request at a
       time. `WEB_CONCURRENCY`, or `serve --workers N --threads N`
+      — `serve --workers=1 --threads=8` with Cloud Run's `--concurrency=8`, so an
+      instance is never sent more requests than it has threads
 - [ ] Post-deploy smoke test: a scripted player hits `/ready`, fetches today's puzzle,
       submits a guess, and checks the response contains no years
-- [ ] Mark smoke-test plays so they don't count in player stats
-- [ ] Automatic rollback when the smoke test fails
+- [ ] Mark smoke-test plays so they don't count in player stats — e.g. one fixed
+      player id the stats skip, which needs no schema change
+- [ ] Automatic rollback when the smoke test fails — with `--no-traffic`, a failed
+      revision never had traffic; after a bad promotion,
+      `update-traffic --to-revisions=PREVIOUS=100`
 - [ ] Break a deploy on purpose and watch it roll back
+- [ ] Until Step 7, generate puzzles ahead by hand (`generate_puzzle --date`, with
+      `.env` pointing at Neon). A day without one shows "no puzzle today"
+- [x] Budget alert on the billing account
+- [ ] Own domain — optional: the `run.app` URL works. The service name is the only
+      part of it you choose, so anything nicer needs a domain (about €10–15 a year)
+      - Cloud Run domain mapping: free, Google-managed certificate, offered in
+        `europe-west1`. Preview, and Google steers production to a load balancer
+        instead (~$18/month) — check current docs
+      - verify the domain (`gcloud domains verify`), map a subdomain
+        (`gcloud beta run domain-mappings create --service=wcf --domain=…`), add the
+        DNS record it prints; the certificate follows on its own
+      - add it to `DJANGO_ALLOWED_HOSTS`. The value then has a comma, which
+        `--update-env-vars` splits on: `'^@^DJANGO_ALLOWED_HOSTS=.run.app,play.example.com'`
+      - not Firebase Hosting in front: it passes on only a cookie named `__session`,
+        and the game needs `player` and `csrftoken`
+      - Step 10 likely wants one too: the OAuth consent screen asks for domains you own
 
 *Teaches: deploy pipelines, health checks, rollbacks, keyless auth from CI.*
 
 ### Step 6 — Database migrations in the pipeline
 - [ ] Migrations run as their own pipeline step before the new revision gets traffic
-      — not on app startup, where several instances would race
+      — not on app startup, where several instances would race. A Cloud Run job
+      running the image's `migrate`, with a `wcf-database-url-unpooled` secret for
+      `DATABASE_URL_UNPOOLED`
 - [ ] Features that force schema changes, each shipped as a migration:
       - streaks
       - "you beat 68% of today's players"
@@ -257,7 +298,8 @@ Things to try once the base pipeline works. Not ordered.
   adds Google login (Step 10). Django's migrations replace Alembic. Its admin site is
   plainer than Filament: the stats dashboard and puzzle picker (Step 11) will be custom
   staff-only pages.
-- **Host.**
+- **Host.** *Decided: Cloud Run + Neon* (Step 5). Images reach Cloud Run from GHCR
+  through an Artifact Registry remote repository.
   - *Google Cloud Run + Neon:* containers in, revisions out — rollback and canary are
     built in, and you already have a GCP billing account from the proverb app. Scales
     to zero, so the first visitor after a quiet spell waits for a cold start. Expects
